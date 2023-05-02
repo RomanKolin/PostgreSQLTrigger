@@ -1,0 +1,73 @@
+CREATE DATABASE Trigger;
+CREATE TABLE firsttable(a smallint, b smallint, c smallint);
+INSERT INTO firsttable(a, b) VALUES (1, 2), (3, 4);
+UPDATE firsttable SET c=a+b;
+INSERT INTO firsttable(a, b) VALUES (5, 6);
+CREATE FUNCTION aplusbequalsc() RETURNS TRIGGER LANGUAGE 'plpgsql' AS
+$$
+BEGIN
+	NEW.c = NEW.a + NEW.b;
+	RETURN NEW;
+END
+$$;
+CREATE TRIGGER aplusbequalscbeforeinsert BEFORE INSERT ON firsttable FOR EACH ROW EXECUTE PROCEDURE aplusbequalsc();
+INSERT INTO firsttable(a, b) VALUES (7, 8);
+ALTER TABLE firsttable DISABLE TRIGGER aplusbequalscbeforeinsert;
+INSERT INTO firsttable(a, b) VALUES (9, 10);
+ALTER TABLE firsttable ENABLE TRIGGER aplusbequalscbeforeinsert;
+INSERT INTO firsttable(a, b) VALUES (11, 12);
+UPDATE firsttable SET a=13, b=14 WHERE a=5 AND b=6;
+DROP TRIGGER aplusbequalscbeforeinsert ON firsttable;
+CREATE TRIGGER aplusbequalscbeforeinsert BEFORE INSERT ON firsttable FOR EACH ROW EXECUTE PROCEDURE aplusbequalsc();
+ALTER TABLE firsttable DISABLE TRIGGER aplusbequalscbeforeinsert;
+INSERT INTO firsttable(a, b) VALUES (15, 16);
+CREATE TRIGGER aplusbequalscbeforeinsertupdate BEFORE INSERT OR UPDATE ON firsttable FOR EACH ROW EXECUTE PROCEDURE aplusbequalsc();
+UPDATE firsttable SET a=5, b=6 WHERE a=15 AND b=16;
+ALTER TABLE firsttable ADD COLUMN d smallint;
+UPDATE firsttable SET d=27 WHERE c IS NULL;
+ALTER TABLE firsttable DISABLE TRIGGER aplusbequalscbeforeinsertupdate;
+CREATE TRIGGER aplusbequalscwithconditionalbeforeinsertupdate BEFORE INSERT OR UPDATE ON firsttable FOR EACH ROW WHEN (NEW.a>27) EXECUTE PROCEDURE aplusbequalsc();
+INSERT INTO firsttable(a, b) VALUES (17, 18);
+INSERT INTO firsttable(a, b) VALUES (29, 30);
+CREATE TABLE userdat(log varchar(10), passw varchar(50));
+INSERT INTO userdat VALUES('romankolin', 'IT2017year');
+CREATE FUNCTION hash() RETURNS TRIGGER LANGUAGE 'plpgsql' AS
+$$
+BEGIN
+	NEW.passw=md5(NEW.passw);
+	RETURN NEW;
+END
+$$;
+CREATE TRIGGER passwordtohashbeforeinsert BEFORE INSERT ON userdat FOR EACH ROW EXECUTE PROCEDURE hash();
+INSERT INTO userdat VALUES('roman', 'IT2017year');
+CREATE TABLE log(tim timestamp DEFAULT now(), event varchar(100));
+DROP TRIGGER passwordtohashbeforeinsert ON userdat;
+CREATE TRIGGER passwordtohashbeforeinsert BEFORE INSERT ON userdat FOR EACH ROW EXECUTE PROCEDURE hash();
+ALTER TABLE userdat DISABLE TRIGGER passwordtohashbeforeinsert;
+CREATE FUNCTION log() RETURNS TRIGGER LANGUAGE 'plpgsql' AS
+$$
+BEGIN
+	INSERT INTO log(event) VALUES(CONCAT('Account by ', OLD.log, ' deleted'));
+	RETURN OLD;
+END
+$$;
+CREATE TRIGGER logbeforedelete BEFORE DELETE ON userdat FOR EACH ROW EXECUTE PROCEDURE log();
+DELETE FROM userdat WHERE log='romankolin';
+ALTER TABLE userdat DISABLE TRIGGER logbeforedelete;
+CREATE OR REPLACE FUNCTION logwithcondition() RETURNS TRIGGER LANGUAGE 'plpgsql' AS
+$$
+BEGIN
+	IF OLD.log='romankolin' THEN
+		INSERT INTO log(event) VALUES('Attempt to delete admin account');
+		RAISE NOTICE 'You don''t have permission to delete admin account';
+		RETURN NULL;
+	END IF;
+	INSERT INTO log(event) VALUES(CONCAT('Account by ', OLD.log, ' deleted'));
+	RETURN OLD;
+END
+$$;
+CREATE TRIGGER logwithconditionbeforedelete BEFORE DELETE ON userdat FOR EACH ROW EXECUTE PROCEDURE logwithcondition();
+INSERT INTO userdat VALUES('romankolin', 'IT2017year');
+DELETE FROM userdat WHERE log='romankolin';
+CREATE RULE log AS ON DELETE TO log DO INSTEAD NOTHING;
+DELETE FROM log;

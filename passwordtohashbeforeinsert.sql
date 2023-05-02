@@ -1,0 +1,8 @@
+CREATE FUNCTION hash() RETURNS TRIGGER LANGUAGE 'plpgsql' AS
+$$
+BEGIN
+	NEW.passw=md5(NEW.passw);
+	RETURN NEW;
+END
+$$;
+CREATE TRIGGER passwordtohashbeforeinsert BEFORE INSERT ON userdat FOR EACH ROW EXECUTE PROCEDURE hash();
